@@ -129,7 +129,7 @@ def render(lesson, request_id, base_url, public, test_audio=False):
             run(["ffmpeg", "-y", "-loop", "1", "-framerate", "30", "-i", str(png), "-i", str(audio),
                 "-map", "0:v:0", "-map", "1:a:0", "-vf", "format=yuv420p", "-af", "apad",
                 "-t", str(duration), "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-                "-c:a", "aac", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", str(video)])
+                "-maxrate", "5M", "-bufsize", "10M", "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", str(video)])
             segments.append(video)
         listing = tmp / "concat.txt"
         listing.write_text("".join(f"file '{p.as_posix()}'\n" for p in segments))
