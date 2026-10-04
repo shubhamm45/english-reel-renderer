@@ -1,5 +1,7 @@
 # Daily English Reel Renderer
 
+Design v2 uses a warm cream background, coral/mint/ink lesson panels, larger headings, learning cues, three-step navigation, and gentle zoom/fade motion.
+
 This bundle renders a narrated, three-card, 1080 × 1920 English lesson as an H.264/AAC MP4. GitHub Actions publishes it through GitHub Pages. Each render has its own request ID and result URL; Make must use that result, not an unrelated `latest.json`.
 
 ## 1. Upload and enable GitHub Pages

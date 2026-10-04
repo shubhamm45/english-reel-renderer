@@ -5,7 +5,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import tempfile
 from datetime import datetime, timezone
@@ -33,7 +32,7 @@ def validate(lesson, request_id):
 def font(size, bold=False):
     candidates = [os.environ.get("REEL_FONT", ""),
         f"/usr/share/fonts/truetype/dejavu/DejaVuSans{'-Bold' if bold else ''}.ttf",
-        "/System/Library/Fonts/Supplemental/Arial.ttf"]
+        f"/System/Library/Fonts/Supplemental/Arial{' Bold' if bold else ''}.ttf"]
     for path in candidates:
         if path and Path(path).exists():
             return ImageFont.truetype(path, size)
@@ -64,27 +63,68 @@ def wrap(draw, text, face, width):
 
 
 def card(label, text, title, index, dest):
-    im = Image.new("RGB", (1080, 1920), "#101827")
+    # Keep key content inside the central safe area for Reel controls/captions.
+    cream, ink, coral, mint = "#f5f1e8", "#172b29", "#ff704f", "#c9e9d7"
+    im = Image.new("RGB", (1080, 1920), cream)
     d = ImageDraw.Draw(im)
-    d.rounded_rectangle((72, 250, 1008, 1520), radius=40, fill="#18263b")
-    d.text((108, 310), "DAILY ENGLISH", font=font(32, True), fill="#73e7c6")
-    d.text((108, 400), label.upper(), font=font(40, True), fill="#a9b8ce")
-    size = 76
+    d.ellipse((730, -160, 1240, 350), fill=mint)
+    d.ellipse((-180, 1480, 300, 1960), fill="#eadfcf")
+    # Small editorial masthead and lesson number.
+    d.rounded_rectangle((88, 170, 408, 226), radius=28, fill=ink)
+    d.text((111, 182), "DAILY / ENGLISH", font=font(27, True), fill=cream)
+    d.text((815, 180), f"0{index} / 03", font=font(28, True), fill=ink)
+    headlines = ["Sound more", "Make it", "Try it in"]
+    endings = ["natural.", "click.", "real life."]
+    d.text((88, 290), headlines[index-1], font=font(92, True), fill=ink)
+    d.text((88, 395), endings[index-1], font=font(92, True), fill=coral)
+    panel = (88, 570, 944, 1180)
+    fill = [ink, mint, coral][index-1]
+    fg = cream if index == 1 else ink
+    # Offset shadow adds depth without a large empty enclosing card.
+    d.rounded_rectangle((100, 584, 956, 1194), radius=38, fill="#ddd4c5")
+    d.rounded_rectangle(panel, radius=38, fill=fill)
+    small_label = ["THE PHRASE", "IN PLAIN ENGLISH", "YOUR EXAMPLE"][index-1]
+    d.text((132, 612), small_label, font=font(26, True), fill=fg)
+    d.line((132, 668, 890, 668), fill=fg, width=2)
+    size = 90 if index == 1 else 76
     while True:
         face = font(size, True)
-        lines = wrap(d, text, face, 840)
-        if len(lines) * (size + 20) <= 750:
+        lines = wrap(d, text, face, 746)
+        height = len(lines) * (size + 18)
+        if height <= 410:
             break
         size -= 2
-        if size < 30:
+        if size < 32:
             raise ValueError("Text cannot fit on a card")
-    y = 560
+    y = 710 + (410-height)/2
     for line in lines:
-        d.text((108, y), line, font=face, fill="#ffffff")
-        y += size + 20
-    for line_no, line in enumerate(wrap(d, title, font(30), 840)):
-        d.text((108, 1370 + line_no * 38), line, font=font(30), fill="#a9b8ce")
-    d.text((108, 1600), f"{index}/3  •  Practice out loud", font=font(30), fill="#73e7c6")
+        d.text((132, y), line, font=face, fill=fg)
+        y += size + 18
+    # Deliberate supporting visual, with a different learning cue per scene.
+    d.rounded_rectangle((88, 1250, 944, 1428), radius=32, fill="#ffffff")
+    d.ellipse((116, 1288, 222, 1394), fill=mint if index != 2 else coral)
+    if index == 1:
+        # Speech waveform.
+        for n, h in enumerate([16, 35, 58, 78, 44, 26]):
+            x = 137 + n*12
+            d.rounded_rectangle((x, 1341-h/2, x+6, 1341+h/2), radius=3, fill=ink)
+        heading, detail = "Say it with confidence", "Listen. Then repeat out loud."
+    elif index == 2:
+        d.line((144, 1340, 163, 1360, 197, 1320), fill=ink, width=8)
+        heading, detail = "One phrase. One idea.", "Keep it simple. Make it stick."
+    else:
+        d.rounded_rectangle((141, 1315, 197, 1358), radius=10, outline=ink, width=4)
+        d.polygon([(151, 1356), (151, 1371), (171, 1356)], fill=ink)
+        heading, detail = "Your turn to speak", "Make a sentence of your own."
+    d.text((252, 1292), heading, font=font(34, True), fill=ink)
+    d.text((252, 1350), detail, font=font(27), fill="#5d706a")
+    for j, line in enumerate(wrap(d, title, font(28), 800)[:2]):
+        d.text((88, 1490+j*36), line, font=font(28), fill="#5d706a")
+    # Three-part navigation gives the lesson a clear visual rhythm.
+    for j, stage in enumerate(["SAY IT", "GET IT", "USE IT"]):
+        x = 88+j*290
+        d.rounded_rectangle((x, 1608, x+270, 1616), radius=4, fill=coral if j+1 == index else "#ddd6cb")
+        d.text((x, 1636), stage, font=font(24, True), fill=ink if j+1 == index else "#86928b")
     im.save(dest)
 
 
@@ -127,7 +167,8 @@ def render(lesson, request_id, base_url, public, test_audio=False):
                 asyncio.run(speak(narration, os.environ.get("REEL_VOICE", "en-US-AriaNeural"), audio))
             duration = float(probe(audio)["format"]["duration"]) + 0.5
             run(["ffmpeg", "-y", "-loop", "1", "-framerate", "30", "-i", str(png), "-i", str(audio),
-                "-map", "0:v:0", "-map", "1:a:0", "-vf", "format=yuv420p", "-af", "apad",
+                "-map", "0:v:0", "-map", "1:a:0", "-vf",
+                f"zoompan=z='min(1.025,1+on*0.00006)':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=1080x1920:fps=30,fade=t=in:st=0:d=0.18,fade=t=out:st={duration-0.18}:d=0.18,format=yuv420p", "-af", "apad",
                 "-t", str(duration), "-c:v", "libx264", "-preset", "fast", "-crf", "23",
                 "-maxrate", "5M", "-bufsize", "10M", "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", str(video)])
             segments.append(video)
@@ -146,7 +187,7 @@ def render(lesson, request_id, base_url, public, test_audio=False):
     if duration > 90:
         raise ValueError("Lesson exceeds renderer's 90 second limit")
     manifest = {"request_id": request_id, "status": "ready", "video_url": f"{base_url.rstrip('/')}/reels/{request_id}/reel.mp4",
-        "title": lesson["title"], "duration_seconds": round(duration, 2), "width": 1080, "height": 1920,
+        "design_version": 2, "title": lesson["title"], "duration_seconds": round(duration, 2), "width": 1080, "height": 1920,
         "created_at": datetime.now(timezone.utc).isoformat(), "test_audio": test_audio}
     requests = public / "requests"
     requests.mkdir(exist_ok=True)
