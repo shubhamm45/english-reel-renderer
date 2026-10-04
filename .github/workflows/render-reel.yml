@@ -1,0 +1,83 @@
+name: Render English Reel
+run-name: Render ${{ inputs.request_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: Unique ID, 8-80 letters/digits/hyphens/underscores; never reuse
+        required: true
+        type: string
+      lesson_json:
+        description: JSON object with title, phrase, meaning and example
+        required: true
+        type: string
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+# Make should submit one lesson at a time and wait for its result before the next.
+concurrency:
+  group: english-reel-pages
+  cancel-in-progress: false
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install renderer
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          pip install -r requirements.txt
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+      - name: Restore existing videos
+        run: |
+          mkdir -p public
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+            git fetch origin gh-pages
+            git archive FETCH_HEAD | tar -x -C public
+          fi
+      - name: Render and validate
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+          LESSON_JSON: ${{ inputs.lesson_json }}
+          BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: python render_reel.py
+      - name: Save public files for future runs
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+            git fetch origin gh-pages
+            git worktree add publish FETCH_HEAD
+          else
+            mkdir publish
+            git -C publish init
+          fi
+          cp -R public/. publish/
+          git -C publish config user.name 'github-actions[bot]'
+          git -C publish config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C publish add .
+          git -C publish commit -m 'Publish rendered reel'
+          commit=$(git -C publish rev-parse HEAD)
+          if [ -d publish/.git ]; then
+            git fetch ./publish HEAD
+            commit=$(git rev-parse FETCH_HEAD)
+          fi
+          git push origin "$commit:refs/heads/gh-pages"
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

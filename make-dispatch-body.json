@@ -1,0 +1,7 @@
+{
+  "ref": "main",
+  "inputs": {
+    "request_id": "demo-20261004-001",
+    "lesson_json": "{\"title\":\"Sound more natural in English\",\"phrase\":\"I'm on my way.\",\"meaning\":\"Use this when you have started travelling to meet someone.\",\"example\":\"I'm on my way. I'll be there in ten minutes.\"}"
+  }
+}
