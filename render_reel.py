@@ -130,6 +130,17 @@ def card(label, text, title, index, dest):
 
 async def speak(text, voice, path):
     import edge_tts
+    import edge_tts.communicate as _edge_comms
+    # Microsoft disabled speech.platform.bing.com for synthesis ~2026-10-10
+    # (WSServerHandshakeError 403 on the websocket handshake). Route through
+    # api.msedgeservices.com like Edge 155 does (rany2/edge-tts PR #491,
+    # unmerged as of 2026-10-13). Must patch edge_tts.communicate.WSS_URL:
+    # communicate.py binds the name via `from .constants import`, so patching
+    # edge_tts.constants.WSS_URL would have no effect.
+    _edge_comms.WSS_URL = (
+        "wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1"
+        "?Ocp-Apim-Subscription-Key=6A5AA1D4EAFF4E9FB37E23D68491D6F4"
+    )
     for attempt in range(3):
         try:
             await edge_tts.Communicate(text, voice, rate="-8%").save(str(path))
