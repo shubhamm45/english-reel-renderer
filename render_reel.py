@@ -179,7 +179,7 @@ def render(lesson, request_id, base_url, public, test_audio=False):
             duration = float(probe(audio)["format"]["duration"]) + 0.5
             run(["ffmpeg", "-y", "-loop", "1", "-framerate", "30", "-i", str(png), "-i", str(audio),
                 "-map", "0:v:0", "-map", "1:a:0", "-vf",
-                f"zoompan=z='min(1.025,1+on*0.00006)':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=1080x1920:fps=30,fade=t=in:st=0:d=0.18,fade=t=out:st={duration-0.18}:d=0.18,format=yuv420p", "-af", "apad",
+                f"zoompan=z='min(1.025,1+on*0.00006)':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=1080x1920:fps=30,fade=t=out:st={duration-0.18}:d=0.18,format=yuv420p", "-af", "apad",
                 "-t", str(duration), "-c:v", "libx264", "-preset", "fast", "-crf", "23",
                 "-maxrate", "5M", "-bufsize", "10M", "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", str(video)])
             segments.append(video)
